@@ -6,6 +6,7 @@ import json
 import re
 from unidiff import PatchSet
 import pathlib
+from subprocess import run
 
 class AnalyzePRForReqs():
     def __init__(self, repo, pr_num, vul, mal, eng, lic, aut):
@@ -36,7 +37,32 @@ class AnalyzePRForReqs():
         return resp.content
 
 
-    ''' Determine which changes are present in the diff. 
+    def new_get_PR_diff(self):
+        if pr_commit_sha := os.environ.get("GITHUB_SHA") is None:
+            print(f"failed to get GITHUB_SHA env var")
+            sys.exit(1)
+        print(f"pr commit sha = {pr_commit_sha}")
+        # target_branch = os.enviorn["GITHUB_REF_NAME"]
+        if target_branch := os.enviorn.get("GITHUB_REF_NAME") is None:
+            print(f"failed to get GITHUB_REF_NAME env var")
+            sys.exit(1)
+        print(f"target branch = {target_branch}")
+
+        cmd = [
+            "git",
+            "diff",
+            target_branch,
+            pr_commit_sha,
+        ]
+        result = run(cmd, capture_output=True)
+        diff = str(result.stdout)
+
+        return diff
+
+
+
+
+    ''' Determine which changes are present in the diff.
         If more than one package manifest file has been changed, fail as we can't be sure which Phylum project to analyze against '''
     def determine_pr_type(self, diff_data):
         patches = PatchSet(diff_data.decode('utf-8'))
@@ -277,14 +303,14 @@ class AnalyzePRForReqs():
         return url
 
     def run_prtype(self):
-        diff_data = self.get_PR_diff()
+        diff_data = self.new_get_PR_diff()
         pr_type = self.determine_pr_type(diff_data)
         with open('/home/runner/prtype.txt','w') as outfile:
             outfile.write(pr_type)
         sys.exit(0)
 
     def run_analyze(self):
-        diff_data = self.get_PR_diff()
+        diff_data = self.new_get_PR_diff()
         pr_type = self.determine_pr_type(diff_data)
         changes = self.get_diff_hunks(diff_data, pr_type)
         pkg_ver = self.generate_pkgver(changes, pr_type)
