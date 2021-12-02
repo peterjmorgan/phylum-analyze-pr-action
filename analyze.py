@@ -38,12 +38,13 @@ class AnalyzePRForReqs():
 
 
     def new_get_PR_diff(self):
-        if pr_commit_sha := os.environ.get("GITHUB_SHA") is None:
+        pr_commit_sha = os.environ.get("GITHUB_SHA")
+        if pr_commit_sha == None:
             print(f"failed to get GITHUB_SHA env var")
             sys.exit(1)
         print(f"pr commit sha = {pr_commit_sha}")
-        # target_branch = os.enviorn["GITHUB_REF_NAME"]
-        if target_branch := os.environ.get("GITHUB_REF_NAME") is None:
+        target_branch = os.environ.get("GITHUB_REF_NAME")
+        if target_branch == None:
             print(f"failed to get GITHUB_REF_NAME env var")
             sys.exit(1)
         print(f"target branch = {target_branch}")
