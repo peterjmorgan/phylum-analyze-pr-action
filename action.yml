@@ -92,8 +92,8 @@ runs:
         pip install requests
         pip install unidiff
 
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
+    # - name: Setup tmate session
+      # uses: mxschmitt/action-tmate@v3
 
     - name: Get target branch
       shell: bash
