@@ -97,7 +97,7 @@ runs:
 
     - name: Get target branch
       shell: bash
-      run: git fetch origin $GITHUB_BASE_REF
+      run: git fetch origin
 
     - name: run analyze.py pr_type
       shell: bash

@@ -45,7 +45,9 @@ class AnalyzePRForReqs():
             sys.exit(1)
         #  target_branch = os.environ.get("GITHUB_REF_NAME")
         target_branch = os.environ.get("GITHUB_BASE_REF")
+        diff_target = f"origin/{target_branch}"
         print(f"target branch = {target_branch}")
+        print(f"diff target = {diff_target}")
         if target_branch == None:
             print(f"failed to get GITHUB_REF_NAME env var")
             sys.exit(1)
@@ -53,8 +55,7 @@ class AnalyzePRForReqs():
         cmd = [
             "git",
             "diff",
-            target_branch,
-            pr_commit_sha,
+            diff_target,
         ]
         result = run(cmd, capture_output=True)
         diff = str(result.stdout)
