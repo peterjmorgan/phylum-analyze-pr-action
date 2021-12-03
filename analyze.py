@@ -52,15 +52,19 @@ class AnalyzePRForReqs():
             print(f"failed to get GITHUB_REF_NAME env var")
             sys.exit(1)
 
+        github_workspace = os.environ.get('GITHUB_WORKSPACE')
+        prev = os.getcwd()
+        os.chdir(github_workspace)
+
         cmd = [
             "git",
             "diff",
             diff_target,
         ]
         result = run(cmd, capture_output=True)
-        diff = str(result.stdout)
+        os.chdir(prev)
 
-        return diff
+        return result.stdout
 
 
 
