@@ -92,8 +92,8 @@ runs:
         pip install requests
         pip install unidiff
 
-    # - name: Setup tmate session
-      # uses: mxschmitt/action-tmate@v3
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
     - name: run analyze.py pr_type
       shell: bash
       run: python $GITHUB_ACTION_PATH/analyze.py "pr_type" $GITHUB_REPOSITORY ${{ github.event.number }}
