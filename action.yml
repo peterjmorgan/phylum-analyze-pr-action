@@ -94,6 +94,11 @@ runs:
 
     - name: Setup tmate session
       uses: mxschmitt/action-tmate@v3
+
+    - name: Get target branch
+      shell: bash
+      run: git fetch origin $GITHUB_BASE_REF
+
     - name: run analyze.py pr_type
       shell: bash
       run: python $GITHUB_ACTION_PATH/analyze.py "pr_type" $GITHUB_REPOSITORY ${{ github.event.number }}
