@@ -199,6 +199,7 @@ class AnalyzePRForReqs():
     def parse_requirements_txt(self, changes):
         cur = 0
         name_ver_pat = re.compile(r"(.*)==(.*)")
+        pkg_ver = list()
 
         while cur < len(changes):
             if name_ver_match := re.match(name_ver_pat, changes[cur]):
