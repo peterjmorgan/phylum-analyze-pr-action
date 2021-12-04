@@ -1,12 +1,30 @@
 #!/usr/bin/env python3
 import os
 import sys
-import requests
 import json
 import re
 from unidiff import PatchSet
 import pathlib
 from subprocess import run
+
+# TODO:
+# [DONE]    1. Clearly document which environment variables are used
+# []        2. Don't assume PRs are going into master branch, need to get the target
+# []        3. Add Gmefile support
+# [DONE]        4. Document file paths
+
+ENV_KEYS = [
+    "GITHUB_SHA", # for get_PR_diff; this is the SHA of the commit for the branch being merged
+    "GITHUB_BASE_REF", # for get_PR_diff; this is the target branch of the merge
+    "GITHUB_WORKSPACE", # for get_PR_diff; this is where the Pull Request code base is
+]
+
+FILE_PATHS = {
+    "pr_type": "/home/runner/prtype.txt",
+    "phylum_analysis": "/home/runner/phylum_analysis.json",
+    "returncode": "/home/runner/returncode.txt",
+    "pr_comment": "/home/runner/pr_comment.txt",
+}
 
 class AnalyzePRForReqs():
     def __init__(self, repo, pr_num, vul, mal, eng, lic, aut):
@@ -20,41 +38,38 @@ class AnalyzePRForReqs():
         self.gbl_failed = False
         self.gbl_incomplete = False
         self.incomplete_pkgs = list()
+        self.env = dict()
+        self.get_env_vars()
 
-
-    ''' Get the diff output from GitHub's patch-diff endpoint. We use this to understand the changed files and packages '''
-    def get_PR_diff(self):
-        repo = self.repo
-        if '_' in repo:
-            repo = repo.replace('_','-')
-        url = f"https://patch-diff.githubusercontent.com/raw/{repo}/pull/{self.pr_num}.diff"
-        try:
-            resp = requests.get(url)
-        except Exception as e:
-            print(f"[ERROR] Couldn't get patch diff via url")
-            sys.exit(11)
-        print(f"[DEBUG] get_PR_diff: [{resp.status_code} - {len(resp.content)}]")
-        return resp.content
-
+    def get_env_vars(self):
+        for key in ENV_KEYS:
+            temp = os.environ.get(key)
+            if temp is not None:
+                self.env[key] = temp
+            else:
+                print(f"[ERROR] could not get value for os.environ.get({key})")
+                sys.exit(11)
+        return
 
     def new_get_PR_diff(self):
-        pr_commit_sha = os.environ.get("GITHUB_SHA")
-        print(f"pr commit sha = {pr_commit_sha}")
-        if pr_commit_sha == None:
-            print(f"failed to get GITHUB_SHA env var")
-            sys.exit(1)
-        #  target_branch = os.environ.get("GITHUB_REF_NAME")
-        target_branch = os.environ.get("GITHUB_BASE_REF")
+        #pr_commit_sha = os.environ.get("GITHUB_SHA")
+        #target_branch = os.environ.get("GITHUB_BASE_REF")
+        pr_commit_sha = self.env.get("GITHUB_SHA")
+        target_branch = self.env.get("GITHUB_BASE_REF")
         diff_target = f"origin/{target_branch}"
+        #TODO: remove
         print(f"target branch = {target_branch}")
         print(f"diff target = {diff_target}")
-        if target_branch == None:
-            print(f"failed to get GITHUB_REF_NAME env var")
-            sys.exit(1)
 
-        github_workspace = os.environ.get('GITHUB_WORKSPACE')
+        #  github_workspace = os.environ.get('GITHUB_WORKSPACE')
+        github_workspace = self.env.get("GITHUB_WORKSPACE")
         prev = os.getcwd()
         os.chdir(github_workspace)
+
+        git_fetch_res = run("git fetch origin".split(" "))
+        if git_fetch_res.returncode != 0:
+            print(f"[ERROR] failed to git fetch origin")
+            sys.exit(11)
 
         cmd = [
             "git",
@@ -62,11 +77,12 @@ class AnalyzePRForReqs():
             diff_target,
         ]
         result = run(cmd, capture_output=True)
+        if result.returncode != 0:
+            print(f"[ERROR] failed to git diff")
+            sys.exit(11)
+
         os.chdir(prev)
-
         return result.stdout
-
-
 
 
     ''' Determine which changes are present in the diff.
@@ -312,7 +328,8 @@ class AnalyzePRForReqs():
     def run_prtype(self):
         diff_data = self.new_get_PR_diff()
         pr_type = self.determine_pr_type(diff_data)
-        with open('/home/runner/prtype.txt','w') as outfile:
+        # with open('/home/runner/prtype.txt','w') as outfile:
+        with open(FILE_PATHS.get("pr_type"),'w') as outfile:
             outfile.write(pr_type)
         sys.exit(0)
 
@@ -321,7 +338,8 @@ class AnalyzePRForReqs():
         pr_type = self.determine_pr_type(diff_data)
         changes = self.get_diff_hunks(diff_data, pr_type)
         pkg_ver = self.generate_pkgver(changes, pr_type)
-        phylum_json = self.read_phylum_analysis('/home/runner/phylum_analysis.json')
+        # phylum_json = self.read_phylum_analysis('/home/runner/phylum_analysis.json')
+        phylum_json = self.read_phylum_analysis(FILE_PATHS.get("phylum_analysis"))
         risk_data = self.parse_risk_data(phylum_json, pkg_ver)
         project_url = self.get_project_url(phylum_json)
         returncode = 0
@@ -333,7 +351,8 @@ class AnalyzePRForReqs():
             header = "## Phylum OSS Supply Chain Risk Analysis\n\n"
             header += "<details>\n<summary>Background</summary>\n<br />\nThis repository uses a GitHub Action to automatically analyze the risk of new dependencies added to requirements.txt via Pull Request. An administrator of this repository has set score requirements for Phylum's five risk domains.<br /><br />\nIf you see this comment, one or more dependencies added to the requirements.txt file in this Pull Request have failed Phylum's risk analysis.\n</details>\n\n"
 
-            with open('/home/runner/pr_comment.txt','w') as outfile:
+            # with open('/home/runner/pr_comment.txt','w') as outfile:
+            with open(FILE_PATHS.get("pr_comment"),'w') as outfile:
                 outfile.write(header)
                 for line in risk_data:
                     if line:
@@ -345,10 +364,10 @@ class AnalyzePRForReqs():
             print(f"[DEBUG] {len(self.incomplete_pkgs)} packages were incomplete as of the analysis job")
             returncode += 5
 
-        with open('/home/runner/returncode.txt','w') as resultout:
+        # with open('/home/runner/returncode.txt','w') as resultout:
+        with open(FILE_PATHS.get("returncode"),'w') as resultout:
             resultout.write(str(returncode))
             print(f"[DEBUG] returncode: wrote {str(returncode)}")
-
 
 
 if __name__ == "__main__":
