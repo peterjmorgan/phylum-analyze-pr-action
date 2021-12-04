@@ -9,8 +9,8 @@ from subprocess import run
 
 # TODO:
 # [DONE]    1. Clearly document which environment variables are used
-# []        2. Don't assume PRs are going into master branch, need to get the target
-# []        3. Add Gmefile support
+# [DONE]    2. Don't assume PRs are going into master branch, need to get the target
+# [DONE]        3. Add Gmefile support
 # [DONE]        4. Document file paths
 
 ENV_KEYS = [
@@ -52,16 +52,10 @@ class AnalyzePRForReqs():
         return
 
     def new_get_PR_diff(self):
-        #pr_commit_sha = os.environ.get("GITHUB_SHA")
-        #target_branch = os.environ.get("GITHUB_BASE_REF")
         pr_commit_sha = self.env.get("GITHUB_SHA")
         target_branch = self.env.get("GITHUB_BASE_REF")
         diff_target = f"origin/{target_branch}"
-        #TODO: remove
-        print(f"target branch = {target_branch}")
-        print(f"diff target = {diff_target}")
 
-        #  github_workspace = os.environ.get('GITHUB_WORKSPACE')
         github_workspace = self.env.get("GITHUB_WORKSPACE")
         prev = os.getcwd()
         os.chdir(github_workspace)
@@ -125,6 +119,13 @@ class AnalyzePRForReqs():
                 else:
                     if pr_type != 'package-lock.json':
                         print(f"[ERROR] PR contains changes from mulitple packaging systems - cannot determine changeset")
+            if 'Gemfile.lock' in patchfile.path:
+                if not pr_type:
+                    pr_type = 'Gemfile.lock'
+                    lang = 'ruby'
+                else:
+                    if pr_type != 'Gemfile.lock':
+                        print(f"[ERROR] PR contains changes from mulitple packaging systems - cannot determine changeset")
 
         print(f"[DEBUG] pr_type: {pr_type}")
         return pr_type
@@ -182,39 +183,70 @@ class AnalyzePRForReqs():
             cur += 1
         return pkg_ver
 
+    def parse_gemfile_lock(self, changes):
+        cur = 0
+        name_ver_pat        = re.compile(r"\s{4}(.*?)\ \((.*?)\)")
+        pkg_ver = list()
+
+        while cur < len(changes):
+            if name_ver_match := re.match(name_ver_pat, changes[cur]):
+                name = name_ver_match.groups()[0]
+                ver = name_ver_match.groups()[1]
+                pkg_ver.append((name,ver))
+            cur += 1
+        return pkg_ver
+
+    def parse_requirements_txt(self, changes):
+        cur = 0
+        name_ver_pat = re.compile(r"(.*)==(.*)")
+
+        while cur < len(changes):
+            if name_ver_match := re.match(name_ver_pat, changes[cur]):
+                name = name_ver_match.groups()[0]
+                ver = name_ver_match.groups()[1]
+                pkg_ver.append((name,ver))
+            cur += 1
+        return pkg_ver
+
+
     ''' Parse requirements.txt to generate a list of tuples of (package_name, version) '''
     def generate_pkgver(self, changes, pr_type):
         if pr_type == 'requirements.txt':
-            pat = re.compile(r"(.*)==(.*)")
+            #  pat = re.compile(r"(.*)==(.*)")
+            pkg_ver_tup = self.parse_requirements_txt(changes)
+            return pkg_ver_tup
         elif pr_type == 'yarn.lock':
             pkg_ver_tup = self.parse_yarn_lock(changes)
             return pkg_ver_tup
         elif pr_type == 'package-lock.json':
             pkg_ver_tup = self.parse_package_lock(changes)
             return pkg_ver_tup
+        elif pr_type == "Gemfile.lock":
+            pkg_ver_tup = self.parse_gemfile_lock(changes)
+            return pkg_ver_tup
 
-        no_version = 0
-        pkg_ver = dict()
-        pkg_ver_tup = list()
+        #  no_version = 0
+        #  pkg_ver = dict()
+        #  pkg_ver_tup = list()
 
-        for line in changes:
-            if line == '\n':
-                continue
-            if match := re.match(pat, line):
-                pkg,ver = match.groups()
-                pkg_ver[pkg] = ver
-                pkg_ver_tup.append((pkg,ver))
-            else:
-                no_version += 1
+        #  for line in changes:
+            #  if line == '\n':
+                #  continue
+            #  if match := re.match(pat, line):
+                #  pkg,ver = match.groups()
+                #  pkg_ver[pkg] = ver
+                #  pkg_ver_tup.append((pkg,ver))
+            #  else:
+                #  no_version += 1
 
-        if no_version > 0:
-            print(f"[ERROR] Found entries that do not specify version, preventing analysis. Exiting")
-            sys.exit(11)
+        #  if no_version > 0:
+            #  print(f"[ERROR] Found entries that do not specify version, preventing analysis. Exiting")
+            #  sys.exit(11)
 
         return pkg_ver_tup
 
     ''' Read phylum_analysis.json file '''
-    def read_phylum_analysis(self, filename='/home/runner/phylum_analysis.json'):
+    def read_phylum_analysis(self, filename):
         if not pathlib.Path(filename).is_file():
             print(f"[ERROR] Cannot find {filename}")
             sys.exit(11)
